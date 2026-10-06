@@ -57,11 +57,22 @@ template <std::size_t Multiple> auto roundUp(int NumToRound) -> int {
 /// \arg UseDouble The input that specifies either single precision, double precision or automatic selection.
 /// \arg Properties The device properties.
 /// \return The selected precision, either 0 or 1 for float or double respectively.
-auto getPrecision(int UseDouble, const compat::DeviceProperties& Properties) -> int {
+auto getPrecision(int DeviceIndex, int UseDouble, const compat::DeviceProperties& Properties) -> int {
 #if (CUDART_VERSION >= 8000)
   // read precision ratio (dp/sp) of GPU to choose the right variant for maximum
   // workload
-  if (UseDouble == 2 && Properties.singleToDoublePrecisionPerfRatio > 3) {
+#if (CUDART_VERSION >= 13000)
+  // CUDA 13 removed singleToDoublePrecisionPerfRatio from cudaDeviceProp
+  (void)Properties;
+  int SingleToDoubleRatio = 0;
+  compat::accellSafeCall(static_cast<compat::ErrorT>(cudaDeviceGetAttribute(
+                             &SingleToDoubleRatio, cudaDevAttrSingleToDoublePrecisionPerfRatio, DeviceIndex)),
+                         __FILE__, __LINE__, DeviceIndex);
+#else
+  (void)DeviceIndex;
+  const int SingleToDoubleRatio = Properties.singleToDoublePrecisionPerfRatio;
+#endif
+  if (UseDouble == 2 && SingleToDoubleRatio > 3) {
     return 0;
   }
   if (UseDouble) {
@@ -70,6 +81,7 @@ auto getPrecision(int UseDouble, const compat::DeviceProperties& Properties) -> 
   return 0;
 #else
   // as precision ratio is not supported return default/user input value
+  (void)DeviceIndex;
   (void)Properties;
 
   if (UseDouble) {
@@ -91,7 +103,7 @@ auto getPrecision(int DeviceIndex, int UseDouble) -> int {
   compat::accellSafeCall(compat::memGetInfo(MemoryAvail, MemoryTotal), __FILE__, __LINE__, DeviceIndex);
   compat::accellSafeCall(compat::getDeviceProperties(Properties, DeviceIndex), __FILE__, __LINE__, DeviceIndex);
 
-  UseDouble = getPrecision(UseDouble, Properties);
+  UseDouble = getPrecision(DeviceIndex, UseDouble, Properties);
 
   const bool DoubleNotSupported =
 #ifdef FIRESTARTER_BUILD_CUDA

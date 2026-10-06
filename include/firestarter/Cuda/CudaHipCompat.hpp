@@ -423,7 +423,12 @@ inline auto createContextOrStream(int DeviceIndex) -> StreamOrContext {
                             << DeviceIndex;
   CUdevice Device;
   accellSafeCall(cuDeviceGet(&Device, DeviceIndex), __FILE__, __LINE__, DeviceIndex);
+#if CUDA_VERSION >= 13000
+  // CUDA 13: cuCtxCreate maps to cuCtxCreate_v4 with an additional (optional) CUctxCreateParams*
+  accellSafeCall(cuCtxCreate(&Soc, nullptr, 0, Device), __FILE__, __LINE__, DeviceIndex);
+#else
   accellSafeCall(cuCtxCreate(&Soc, 0, Device), __FILE__, __LINE__, DeviceIndex);
+#endif
 
   firestarter::log::trace() << "Set created " << AccelleratorString << " context on device nr. " << DeviceIndex;
   accellSafeCall(cuCtxSetCurrent(Soc), __FILE__, __LINE__, DeviceIndex);
